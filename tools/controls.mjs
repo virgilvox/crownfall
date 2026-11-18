@@ -1,0 +1,30 @@
+// Verifies human controls: stick moves, A jumps (and double jumps), X dashes, B slams, Y taunts.
+import puppeteer from 'puppeteer-core';
+import { execSync } from 'child_process';
+import { serve } from './serve.mjs';
+execSync('node tools/build.mjs --dev', { stdio: 'inherit' });
+const server = await serve(8080);
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage();
+const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+await page.goto('http://localhost:8080/?arena=garden&bots=0&humans=1&skip=1&pads=1');
+await page.waitForFunction('window.__menus && window.__menus.mode === "round"', { timeout: 120000 });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const st = () => page.evaluate(() => { const f = window.__menus.round.fighters[0]; return { x: +f.pos.x.toFixed(2), y: +f.pos.y.toFixed(2), z: +f.pos.z.toFixed(2), vy: +f.vel.y.toFixed(1), gr: f.grounded, dash: f.dashT > 0, slam: f.slam, taunt: f.tauntT > 0, air: f.airJumps, yaw: +f.yaw.toFixed(2) }; });
+await sleep(1500);
+const log = (k, v) => console.log(k.padEnd(16), JSON.stringify(v));
+log('start', await st());
+await page.evaluate(() => window.__axis(1, 1, 0)); await sleep(600); log('stick right 0.6s', await st());
+await page.evaluate(() => window.__axis(1, 0, -1)); await sleep(500); log('stick up 0.5s', await st());
+await page.evaluate(() => window.__axis(1, 0, 0)); await sleep(400);
+await page.evaluate(() => window.__press(1, 0, 400)); await sleep(250); log('A held 0.25s', await st());
+await page.evaluate(() => window.__press(1, 0, 80)); await sleep(150); log('A double jump', await st());
+await sleep(1200); log('landed', await st());
+await page.evaluate(() => { window.__axis(1, 1, 0); window.__press(1, 2, 80); }); await sleep(120); log('X dash', await st());
+await sleep(500); await page.evaluate(() => window.__axis(1, 0, 0));
+await page.evaluate(() => window.__press(1, 0, 80)); await sleep(400); await page.evaluate(() => window.__press(1, 1, 80)); await sleep(120); log('B slam in air', await st());
+await sleep(800); log('after slam', await st());
+await page.evaluate(() => window.__press(1, 3, 80)); await sleep(300); log('Y taunt', await st());
+await page.evaluate(() => window.__press(1, 1, 80)); await sleep(150); log('B shove', await page.evaluate(() => ({ shove: window.__menus.round.fighters[0].shoveT })));
+await browser.close(); server.close();
+if (errs.length) { console.error(errs); process.exit(1); }

@@ -1,0 +1,10 @@
+import esbuild from 'esbuild'; import fs from 'fs'; import path from 'path'; import puppeteer from 'puppeteer-core'; import http from 'http'; import { fileURLToPath } from 'url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const tmp = path.join(root, 'tools/catalog/out2'); fs.mkdirSync(tmp, { recursive: true });
+await esbuild.build({ entryPoints: [path.join(root, 'tools/catalog/lineup.js')], bundle: true, format: 'esm', outfile: path.join(tmp, 'l.js'), logLevel: 'warning' });
+fs.writeFileSync(path.join(tmp, 'index.html'), '<body style="margin:0"><canvas id="c"></canvas><script type="module" src="l.js"></script>');
+const server = http.createServer((req, res) => { const p = decodeURIComponent(req.url.split('?')[0]); const f = p === '/' ? path.join(tmp, 'index.html') : fs.existsSync(path.join(tmp, p)) ? path.join(tmp, p) : path.join(root, p); if (!fs.existsSync(f)) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : f.endsWith('.js') ? 'text/javascript' : 'application/octet-stream' }); fs.createReadStream(f).pipe(res); }).listen(8092);
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'], defaultViewport: { width: 1800, height: 700 } });
+const page = await browser.newPage(); page.on('console', (m) => console.log('console:', m.text())); page.on('pageerror', (e) => console.log('pageerror', e.message));
+await page.goto('http://localhost:8092/'); await page.waitForFunction('window.__ready', { timeout: 120000 }); await new Promise((r) => setTimeout(r, 1500));
+await page.screenshot({ path: path.join(root, 'shots/lineup.png') }); await browser.close(); server.close();

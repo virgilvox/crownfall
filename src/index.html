@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CROWNFALL</title>
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html,body{margin:0;height:100%;background:#05060a;overflow:hidden}
+  body{display:flex;align-items:center;justify-content:center}
+  #game-canvas{width:min(100vw,177.78vh);height:min(56.25vw,100vh);display:block;background:#000}
+</style>
+</head>
+<body>
+<canvas id="game-canvas" width="1280" height="720"></canvas>
+<script>
+/* DEV PREVIEW ONLY: keyboard -> fake gamepads. On HOPPER the platform supplies real pads, and the game itself never
+   listens to the keyboard. window.__pads is exposed for test automation (tools/shot.mjs). */
+(() => {
+  const qs = new URLSearchParams(location.search);
+  const n = Math.max(1, Math.min(4, Number(qs.get('pads')) || 2));
+  const mk = (i) => ({
+    id: `HOPPER seat ${i + 1} (STANDARD GAMEPAD)`, index: i, connected: true, mapping: 'standard', timestamp: 0,
+    axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+  });
+  const pads = Array.from({ length: 4 }, (_, i) => mk(i));
+  window.__pads = pads;
+  const set = (p, b, v) => { p.buttons[b].pressed = v; p.buttons[b].value = v ? 1 : 0; };
+  window.__press = (seat, b, ms = 120) => { set(pads[seat - 1], b, true); return new Promise((r) => setTimeout(() => { set(pads[seat - 1], b, false); r(); }, ms)); };
+  window.__axis = (seat, x, y) => { pads[seat - 1].axes[0] = x; pads[seat - 1].axes[1] = y; };
+  navigator.getGamepads = () => { const a = []; for (let i = 0; i < n; i++) a.push(pads[i]); return a; };
+  const maps = [
+    { ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['y', -1], ArrowDown: ['y', 1], z: 0, x: 1, a: 2, s: 3, Enter: 9 },
+    { j: ['x', -1], l: ['x', 1], i: ['y', -1], k: ['y', 1], u: 0, o: 1, y: 2, h: 3, p: 9 },
+  ];
+  const held = [{}, {}];
+  const apply = () => maps.forEach((m, si) => {
+    const p = pads[si]; let ax = 0, ay = 0;
+    for (const [k, d] of Object.entries(m)) {
+      const on = held[si][k];
+      if (Array.isArray(d)) { if (on) (d[0] === 'x' ? (ax += d[1]) : (ay += d[1])); } else set(p, d, !!on);
+    }
+    p.axes[0] = ax; p.axes[1] = ay;
+    set(p, 12, ay < 0); set(p, 13, ay > 0); set(p, 14, ax < 0); set(p, 15, ax > 0);
+  });
+  const key = (e, v) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; maps.forEach((m, si) => { if (k in m) { held[si][k] = v; e.preventDefault(); } }); apply(); };
+  addEventListener('keydown', (e) => key(e, true));
+  addEventListener('keyup', (e) => key(e, false));
+})();
+</script>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
