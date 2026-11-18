@@ -1,7 +1,7 @@
 // Title, character select, cup select, rounds, results, podium and attract mode.
 import * as THREE from 'three';
 import { W, H, text, rr, panel, crownIcon, measure, FONT } from './ui.js';
-import { BTN } from './input.js';
+import { BTN, KB_INDEX } from './input.js';
 import { ROSTER, PLAYER_COLORS, PLAYER_HEX } from './roster.js';
 import { buildStage } from './stage.js';
 import { ARENAS, loadArena } from './arenas/index.js';
@@ -83,8 +83,8 @@ export class Menus {
     g.restore();
     text(g, 'ONE CROWN.  FIVE ARENAS.  NO MERCY.', W / 2, 206, { size: 22, align: 'center', color: '#e9e2ff', spacing: 4 });
     const blink = 0.55 + Math.sin(t * 4) * 0.45;
-    text(g, 'PRESS  A  TO PLAY', W / 2, 622, { size: 44, align: 'center', color: '#fff', alpha: 0.4 + blink * 0.6 });
-    text(g, 'KEYBOARD:  ARROWS MOVE   Z JUMP / OK   X SLAM   A DASH   S TAUNT   ENTER START', W / 2, 660, { size: 16, align: 'center', color: '#ffe9a8', spacing: 1 });
+    text(g, 'PRESS  A  OR  SPACE  TO PLAY', W / 2, 622, { size: 44, align: 'center', color: '#fff', alpha: 0.4 + blink * 0.6 });
+    text(g, 'KEYBOARD:  WASD / ARROWS MOVE    SPACE JUMP    SHIFT DASH    L SLAM    T TAUNT    ENTER START', W / 2, 660, { size: 16, align: 'center', color: '#ffe9a8', spacing: 1 });
     const st = this.stats;
     const best = st.wins && Object.entries(st.wins).sort((a, b) => b[1] - a[1])[0];
     const line = [];
@@ -118,7 +118,18 @@ export class Menus {
     if (joinPad) this.join(joinPad);
     audio.music('title');
   }
-  slotOf(pad) { return clamp((pad.seat || pad.index + 1) - 1, 0, 3); }
+  // a pad keeps the slot it joined; otherwise it wants its seat's slot, or the first free one if that is taken
+  // (the keyboard and a phone can both claim seat 1)
+  // button name for prompts: the pad name, plus the key when someone is on the keyboard
+  k(btn, key) { return this.game.input.kb.used ? `${btn} / ${key}` : btn; }
+  slotOf(pad) {
+    const mine = this.slots.findIndex((s) => s.joined && s.pad === pad.index);
+    if (mine >= 0) return mine;
+    const want = clamp((pad.seat || pad.index + 1) - 1, 0, 3);
+    if (!this.slots[want].joined) return want;
+    const free = this.slots.findIndex((s) => !s.joined);
+    return free >= 0 ? free : want;
+  }
   join(pad) {
     const s = this.slots[this.slotOf(pad)];
     if (s.joined) return;
@@ -202,10 +213,10 @@ export class Menus {
         else {
           text(g, '<', cx - cw / 2 + 24, y + 182, { size: 38, color: '#fff', align: 'center', alpha: 0.6 + Math.sin(t * 6) * 0.3 });
           text(g, '>', cx + cw / 2 - 24, y + 182, { size: 38, color: '#fff', align: 'center', alpha: 0.6 + Math.sin(t * 6) * 0.3 });
-          text(g, 'A: READY    B: LEAVE', cx, y + 182, { size: 14, align: 'center', color: '#e9e2ff', spacing: 1 });
+          text(g, s.pad === KB_INDEX ? 'SPACE: READY   BKSP: LEAVE' : 'A: READY    B: LEAVE', cx, y + 182, { size: 14, align: 'center', color: '#e9e2ff', spacing: 1 });
         }
       } else if (pad) {
-        text(g, 'PRESS A', cx, y + 100, { size: 36, align: 'center', color: '#fff', alpha: 0.5 + Math.sin(t * 5) * 0.4 });
+        text(g, pad.keyboard ? 'PRESS SPACE' : 'PRESS A', cx, y + 100, { size: pad.keyboard ? 30 : 36, align: 'center', color: '#fff', alpha: 0.5 + Math.sin(t * 5) * 0.4 });
         text(g, 'TO JOIN', cx, y + 140, { size: 24, align: 'center', color: col });
       } else {
         text(g, 'CPU', cx, y + 100, { size: 34, align: 'center', color: 'rgba(255,255,255,0.45)' });
@@ -213,9 +224,9 @@ export class Menus {
       }
     });
     const cpuTxt = this.cpuMode === 'fill' ? 'FILL' : String(this.cpuMode);
-    text(g, `CPUs: ${cpuTxt}  (Y on first player)`, W / 2, 678, { size: 20, align: 'center', color: '#d8d4ff', spacing: 1 });
-    if (all) text(g, 'PRESS START TO CONTINUE', W / 2, 98, { size: 30, align: 'center', color: '#7dffb0', alpha: 0.6 + Math.sin(t * 6) * 0.4 });
-    else text(g, 'EVERYONE PRESS A TO GET READY', W / 2, 98, { size: 22, align: 'center', color: '#bdb4e6', spacing: 2 });
+    text(g, `CPUs: ${cpuTxt}  (${this.k('Y', 'T')} on first player)`, W / 2, 678, { size: 20, align: 'center', color: '#d8d4ff', spacing: 1 });
+    if (all) text(g, `PRESS ${this.k('START', 'ENTER')} TO CONTINUE`, W / 2, 98, { size: 30, align: 'center', color: '#7dffb0', alpha: 0.6 + Math.sin(t * 6) * 0.4 });
+    else text(g, `EVERYONE PRESS ${this.k('A', 'SPACE')} TO GET READY`, W / 2, 98, { size: 22, align: 'center', color: '#bdb4e6', spacing: 2 });
   }
 
   // ------------------------------------------------------------------ cup select
@@ -223,7 +234,7 @@ export class Menus {
   updateCup(dt, pads) {
     for (const p of pads) {
       const s = this.slots[this.slotOf(p)];
-      if (!s.joined) continue;
+      if (!s.joined || s.pad !== p.index) continue;
       if (p.nav.left) { this.cupSel = (this.cupSel + 5) % 6; audio.sfx('menu'); }
       if (p.nav.right) { this.cupSel = (this.cupSel + 1) % 6; audio.sfx('menu'); }
       if (p.b) { this.setMode('select'); audio.sfx('back'); for (const sl of this.slots) sl.ready = false; return; }
@@ -248,7 +259,7 @@ export class Menus {
       text(g, it.hazard, x + cw / 2, y0 + ch - 34, { size: 13, align: 'center', color: it.color, spacing: 1, maxW: cw - 24 });
       g.restore();
     });
-    text(g, 'LEFT / RIGHT: CHOOSE      A: GO      B: BACK', W / 2, 640, { size: 20, align: 'center', color: '#d8d4ff', spacing: 2 });
+    text(g, `LEFT / RIGHT: CHOOSE      ${this.k('A', 'SPACE')}: GO      ${this.k('B', 'BKSP')}: BACK`, W / 2, 640, { size: 20, align: 'center', color: '#d8d4ff', spacing: 2 });
   }
   startSession(sel) {
     const humans = this.slots.map((s, i) => ({ s, i })).filter((q) => q.s.joined);
@@ -401,7 +412,7 @@ export class Menus {
       if (S.kind === 'cup') text(g, `${tot.points} PTS`, x + w - 34, yy + 62, { size: 17, align: 'right', color: '#cfc9ff' });
       if (f.stats.steals || f.stats.kos) text(g, `STEALS ${f.stats.steals}   RING-OUTS ${f.stats.kos}`, x + 100, yy + 76, { size: 12, color: '#9a96c8', spacing: 1 });
     });
-    if (this.modeT > 1.2) text(g, S.round >= total ? 'PRESS A FOR THE PODIUM' : 'PRESS A FOR NEXT ROUND', x + w / 2, y + h - 22, { size: 22, align: 'center', color: '#fff', alpha: 0.5 + Math.sin(t * 5) * 0.4 });
+    if (this.modeT > 1.2) text(g, S.round >= total ? `PRESS ${this.k('A', 'SPACE')} FOR THE PODIUM` : `PRESS ${this.k('A', 'SPACE')} FOR NEXT ROUND`, x + w / 2, y + h - 22, { size: 22, align: 'center', color: '#fff', alpha: 0.5 + Math.sin(t * 5) * 0.4 });
   }
 
   // ------------------------------------------------------------------ podium
@@ -495,7 +506,7 @@ export class Menus {
       text(g, (e.bot ? 'CPU ' : 'P' + (e.slot + 1) + ' ') + e.char.name, s.x, s.y + 18, { size: 17, align: 'center', color: PLAYER_COLORS[e.slot] });
       if (S.kind === 'cup') text(g, `${tot.points} PTS`, s.x, s.y + 38, { size: 14, align: 'center', color: '#fff' });
     });
-    if (this.podiumT > 1) text(g, 'A: REMATCH        B: CHARACTER SELECT', W / 2, 664, { size: 26, align: 'center', color: '#fff', alpha: 0.6 + Math.sin(t * 5) * 0.3 });
+    if (this.podiumT > 1) text(g, `${this.k('A', 'SPACE')}: REMATCH        ${this.k('B', 'BKSP')}: CHARACTER SELECT`, W / 2, 664, { size: 26, align: 'center', color: '#fff', alpha: 0.6 + Math.sin(t * 5) * 0.3 });
   }
 
   // ------------------------------------------------------------------ frame

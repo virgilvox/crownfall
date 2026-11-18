@@ -8,7 +8,17 @@ import { modelUrl } from './kits.js';
 export const progress = { done: 0, total: 0, label: 'Loading' };
 const track = (p) => { progress.total++; return p.finally(() => { progress.done++; }); };
 
+// HOPPER's player CSP leaves blob: out of connect-src, so GLTFLoader's default ImageBitmapLoader (which fetch()es the
+// blob: URL it makes for textures embedded in .vrm/.glb) fails silently and avatars render untextured white. Decode
+// images through <img> instead: img-src allows blob:.
+const imgTextures = (parser) => {
+  parser.textureLoader = new THREE.TextureLoader(parser.options.manager);
+  parser.textureLoader.setCrossOrigin(parser.options.crossOrigin);
+  parser.textureLoader.setRequestHeader(parser.options.requestHeader);
+  return { name: 'crownfall_img_textures' };
+};
 const gltfLoader = new GLTFLoader();
+gltfLoader.register(imgTextures);
 const modelCache = new Map();
 const modelDone = new Map();
 
@@ -57,6 +67,7 @@ export async function loadAnimJson() {
 }
 
 const vrmLoader = new GLTFLoader();
+vrmLoader.register(imgTextures);
 vrmLoader.register((p) => new VRMLoaderPlugin(p));
 const vrmBuf = new Map();
 export function fetchVRM(file) {

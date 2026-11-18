@@ -22,9 +22,25 @@ slam down on you, or knock you off the edge so the crown pops loose. Rounds are 
 | Y | TAUNT / toggle CPU count on the select screen (first player) |
 | START | start / confirm |
 
-Input is read only from `navigator.getGamepads()`. The game code never listens to the keyboard or mouse; the dev preview
-page (`src/index.html`) installs a keyboard-to-fake-gamepad shim: P1 arrows + Z(A) X(B) A(X) S(Y) Enter(START),
-P2 IJKL + U(A) O(B) Y(X) H(Y) P(START). Add `?pads=4` to expose more seats.
+### Keyboard
+
+| Key | Does |
+|---|---|
+| WASD or arrows | move / menus |
+| Space (or K, Z) | JUMP, confirm (A) |
+| Shift (or J, X) | DASH (X) |
+| L (or C, Backspace) | SLAM, back (B) |
+| T (or I, V) | TAUNT, CPU count (Y) |
+| Enter | START |
+
+Pads come from `navigator.getGamepads()` (HOPPER phones and plugged-in pads). The keyboard is read by the game itself
+(`src/input.js`) as one more pad: because the cart listens for keys, HOPPER hands it raw keys instead of its fixed
+arrows + Z X A S keyboard pad, and the keyboard takes the lowest seat no phone is using. Taps are latched between frames.
+The dev preview page (`src/index.html`) adds fake pads (`?pads=4`) for test automation.
+
+`node tools/hopper-live.mjs` plays the game with a real keyboard inside a local stand-in for HOPPER's player
+(`tools/hopper-harness/`: HOPPER's shipped jsgame shim, sandboxed srcdoc frame, CSP, pad posting and raw-key
+forwarding). `node tools/hopper-live.mjs https://hopper.games/play/crownfall` runs the same check on the live cart.
 
 ## Build and run
 

@@ -14,8 +14,8 @@
 <body>
 <canvas id="game-canvas" width="1280" height="720"></canvas>
 <script>
-/* DEV PREVIEW ONLY: keyboard -> fake gamepads. On HOPPER the platform supplies real pads, and the game itself never
-   listens to the keyboard. window.__pads is exposed for test automation (tools/shot.mjs). */
+/* DEV PREVIEW ONLY: fake gamepads (?pads=N, default 2) driven by test automation through window.__press / __axis
+   (tools/shot.mjs). On HOPPER the platform supplies the pads. The keyboard is read by the game itself (src/input.js). */
 (() => {
   const qs = new URLSearchParams(location.search);
   const n = Math.max(1, Math.min(4, Number(qs.get('pads')) || 2));
@@ -29,23 +29,6 @@
   window.__press = (seat, b, ms = 120) => { set(pads[seat - 1], b, true); return new Promise((r) => setTimeout(() => { set(pads[seat - 1], b, false); r(); }, ms)); };
   window.__axis = (seat, x, y) => { pads[seat - 1].axes[0] = x; pads[seat - 1].axes[1] = y; };
   navigator.getGamepads = () => { const a = []; for (let i = 0; i < n; i++) a.push(pads[i]); return a; };
-  const maps = [
-    { ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['y', -1], ArrowDown: ['y', 1], z: 0, x: 1, a: 2, s: 3, Enter: 9 },
-    { j: ['x', -1], l: ['x', 1], i: ['y', -1], k: ['y', 1], u: 0, o: 1, y: 2, h: 3, p: 9 },
-  ];
-  const held = [{}, {}];
-  const apply = () => maps.forEach((m, si) => {
-    const p = pads[si]; let ax = 0, ay = 0;
-    for (const [k, d] of Object.entries(m)) {
-      const on = held[si][k];
-      if (Array.isArray(d)) { if (on) (d[0] === 'x' ? (ax += d[1]) : (ay += d[1])); } else set(p, d, !!on);
-    }
-    p.axes[0] = ax; p.axes[1] = ay;
-    set(p, 12, ay < 0); set(p, 13, ay > 0); set(p, 14, ax < 0); set(p, 15, ax > 0);
-  });
-  const key = (e, v) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; maps.forEach((m, si) => { if (k in m) { held[si][k] = v; e.preventDefault(); } }); apply(); };
-  addEventListener('keydown', (e) => key(e, true));
-  addEventListener('keyup', (e) => key(e, false));
 })();
 </script>
 <script type="module" src="./main.js"></script>
