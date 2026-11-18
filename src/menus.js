@@ -83,13 +83,14 @@ export class Menus {
     g.restore();
     text(g, 'ONE CROWN.  FIVE ARENAS.  NO MERCY.', W / 2, 206, { size: 22, align: 'center', color: '#e9e2ff', spacing: 4 });
     const blink = 0.55 + Math.sin(t * 4) * 0.45;
-    text(g, 'PRESS  A  TO PLAY', W / 2, 632, { size: 44, align: 'center', color: '#fff', alpha: 0.4 + blink * 0.6 });
+    text(g, 'PRESS  A  TO PLAY', W / 2, 622, { size: 44, align: 'center', color: '#fff', alpha: 0.4 + blink * 0.6 });
+    text(g, 'KEYBOARD:  ARROWS MOVE   Z JUMP / OK   X SLAM   A DASH   S TAUNT   ENTER START', W / 2, 660, { size: 16, align: 'center', color: '#ffe9a8', spacing: 1 });
     const st = this.stats;
     const best = st.wins && Object.entries(st.wins).sort((a, b) => b[1] - a[1])[0];
     const line = [];
     if (st.best > 0) line.push(`BEST CROWN TIME  ${st.best.toFixed(1)}s`);
     if (best) line.push(`MOST WINS  ${ROSTER.find((r) => r.id === best[0])?.name || ''} (${best[1]})`);
-    if (line.length) text(g, line.join('     '), W / 2, 678, { size: 16, align: 'center', color: '#bdb4e6', spacing: 2 });
+    if (line.length) text(g, line.join('     '), W / 2, 690, { size: 14, align: 'center', color: '#bdb4e6', spacing: 2 });
     text(g, 'Music: Kevin MacLeod (CC BY 4.0)  -  see CREDITS', W - 16, H - 14, { size: 11, align: 'right', color: 'rgba(255,255,255,0.45)', shadow: false, sw: 0 });
   }
 
