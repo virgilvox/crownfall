@@ -5,8 +5,51 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { modelUrl } from './kits.js';
 
-export const progress = { done: 0, total: 0, label: 'Loading' };
-const track = (p) => { progress.total++; return p.finally(() => { progress.done++; }); };
+import { gunzipSync } from 'three/examples/jsm/libs/fflate.module.js';
+
+// Loading bar state. `bytes`/`bytesTotal` move as data arrives (sizes come from the build, so the bar is right from the
+// first frame); `done`/`total` count whole steps (parsing each avatar).
+export const progress = { done: 0, total: 0, bytes: 0, bytesTotal: 0, label: 'Loading' };
+export const loadFraction = () => {
+  const b = progress.bytesTotal ? Math.min(1, progress.bytes / progress.bytesTotal) : 0;
+  const s = progress.total ? progress.done / progress.total : 0;
+  return progress.bytesTotal ? b * 0.85 + s * 0.15 : s;
+};
+
+// Release builds ship the big files gzipped (HOPPER's CDN serves them as-is, uncompressed and slowly) with their sizes.
+const GZ = typeof __GZ__ !== 'undefined' && __GZ__;
+const SIZES = typeof __SIZES__ !== 'undefined' ? __SIZES__ : {};
+async function gunzip(buf) {
+  if (typeof DecompressionStream !== 'undefined') {
+    try { return await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); } catch (e) { /* fall through */ }
+  }
+  const out = gunzipSync(new Uint8Array(buf));
+  return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength);
+}
+// Fetches a file (the .gz copy in release builds), counting bytes into the loading bar as they arrive.
+export async function getBytes(path) {
+  const url = GZ && SIZES[path + '.gz'] !== undefined ? path + '.gz' : path;
+  const expect = SIZES[url] || 0;
+  progress.bytesTotal += expect;
+  let got = 0;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`${r.status} ${url}`);
+    let buf;
+    if (r.body && r.body.getReader) {
+      const reader = r.body.getReader(); const chunks = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.byteLength;
+        if (got <= expect) progress.bytes += value.byteLength;
+      }
+      const all = new Uint8Array(got); let o = 0; for (const c of chunks) { all.set(c, o); o += c.byteLength; }
+      buf = all.buffer;
+    } else { buf = await r.arrayBuffer(); got = buf.byteLength; }
+    return url.endsWith('.gz') ? await gunzip(buf) : buf;
+  } finally { progress.bytes += Math.max(0, expect - got); }
+}
 
 // HOPPER's player CSP leaves blob: out of connect-src, so GLTFLoader's default ImageBitmapLoader (which fetch()es the
 // blob: URL it makes for textures embedded in .vrm/.glb) fails silently and avatars render untextured white. Decode
@@ -62,7 +105,7 @@ export function getModel(tok) { return modelDone.get(tok); }
 
 let animJson = null;
 export async function loadAnimJson() {
-  if (!animJson) animJson = fetch('assets/anims.json').then((r) => r.json());
+  if (!animJson) animJson = getBytes('assets/anims.json').then((b) => JSON.parse(new TextDecoder().decode(b)));
   return animJson;
 }
 
@@ -71,7 +114,7 @@ vrmLoader.register(imgTextures);
 vrmLoader.register((p) => new VRMLoaderPlugin(p));
 const vrmBuf = new Map();
 export function fetchVRM(file) {
-  if (!vrmBuf.has(file)) vrmBuf.set(file, track(fetch(`assets/chars/${file}`).then((r) => r.arrayBuffer())));
+  if (!vrmBuf.has(file)) vrmBuf.set(file, getBytes(`assets/chars/${file}`));
   return vrmBuf.get(file);
 }
 export async function parseVRM(file) {

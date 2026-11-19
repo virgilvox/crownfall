@@ -4,6 +4,8 @@ import esbuild from 'esbuild';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import zlib from 'zlib';
+import { slimVRM } from './slim-vrm.mjs';
 import { fileURLToPath } from 'url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -14,11 +16,12 @@ const { KITS, modelUrl } = await import(path.join(root, 'src/kits.js'));
 if (!dev) fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 
-await esbuild.build({
+const bundle = (define = {}) => esbuild.build({
   entryPoints: [path.join(root, 'src/main.js')],
   bundle: true, format: 'esm', target: 'es2020', outfile: path.join(dist, 'main.js'),
-  minify: !dev, sourcemap: dev ? 'inline' : false, legalComments: 'none', logLevel: 'warning',
+  minify: !dev, sourcemap: dev ? 'inline' : false, legalComments: 'none', logLevel: 'warning', define,
 });
+if (dev) await bundle();
 fs.copyFileSync(path.join(root, 'src/index.html'), path.join(dist, 'index.html'));
 const pkg = {
   name: 'crownfall', version: '1.0.0', main: 'main.js',
@@ -60,6 +63,21 @@ for (const f of files) {
   total += fs.statSync(src).size;
 }
 console.log(`copied ${files.size} assets (${(total / 1048576).toFixed(1)} MB)`);
+
+// HOPPER's CDN serves files uncompressed (and not fast), so ship avatars slimmed + gzipped and the animation data
+// gzipped; the game gunzips them (src/assets.js). Their sizes go into the bundle so the loading bar is exact.
+const sizes = {};
+for (const f of [...files]) {
+  if (!/^assets\/chars\/.+\.vrm$|^assets\/anims\.json$/.test(f)) continue;
+  const dst = path.join(dist, f);
+  let buf = fs.readFileSync(dst);
+  if (f.endsWith('.vrm')) buf = slimVRM(buf);
+  const gz = zlib.gzipSync(buf, { level: 9 });
+  fs.writeFileSync(dst + '.gz', gz); fs.rmSync(dst);
+  sizes[f + '.gz'] = gz.length;
+}
+console.log(`gzipped ${Object.keys(sizes).length} files: ${(Object.values(sizes).reduce((a, b) => a + b, 0) / 1048576).toFixed(1)} MB`);
+await bundle({ __GZ__: 'true', __SIZES__: JSON.stringify(sizes) });
 const out = path.join(root, 'crownfall.jsgame');
 fs.rmSync(out, { force: true });
 execSync(`zip -qr -X "${out}" .`, { cwd: dist });

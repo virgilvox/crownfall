@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Overlay, W, H, text } from './ui.js';
 import { Input } from './input.js';
-import { progress, parseVRM, fetchVRM, loadAnimJson } from './assets.js';
+import { progress, loadFraction, parseVRM, fetchVRM, loadAnimJson } from './assets.js';
 import { decodeAnimData } from './anims.js';
 import { Actor } from './character.js';
 import { ROSTER } from './roster.js';
@@ -34,11 +34,14 @@ const cam = new GameCamera();
 class Pool {
   constructor() { this.data = null; this.inst = new Map(); this.pending = new Set(); }
   async init() {
-    this.data = decodeAnimData(await loadAnimJson());
-    progress.label = 'Loading avatars';
-    await Promise.all(ROSTER.map((c) => fetchVRM(c.file)));
+    progress.label = 'Loading fighters';
+    progress.total += ROSTER.length;
+    const anims = loadAnimJson();
+    ROSTER.forEach((c) => fetchVRM(c.file));
+    this.data = decodeAnimData(await anims);
     for (const c of ROSTER) {
       const vrm = await parseVRM(c.file);
+      progress.done++;
       this.inst.set(c.id, [{ actor: new Actor(vrm, this.data, c), used: false }]);
     }
   }
@@ -99,10 +102,11 @@ function frame(now) {
 function drawLoading(g, t) {
   g.fillStyle = '#0b0a1a'; g.fillRect(0, 0, W, H);
   text(g, 'CROWNFALL', W / 2, 280, { size: 96, align: 'center', color: '#ffd23f', sw: 16 });
-  const p = bootError ? 1 : progress.total ? progress.done / progress.total : 0;
+  const p = bootError ? 1 : loadFraction();
   g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(W / 2 - 220, 380, 440, 18);
   g.fillStyle = bootError ? '#ff5a5a' : '#ffd23f'; g.fillRect(W / 2 - 220, 380, 440 * p, 18);
-  text(g, bootError ? 'Something went wrong' : progress.label + '...', W / 2, 430, { size: 22, align: 'center', color: '#d8d4ff' });
+  const mb = progress.bytesTotal && progress.bytes < progress.bytesTotal ? `  ${(progress.bytes / 1048576).toFixed(1)} / ${(progress.bytesTotal / 1048576).toFixed(1)} MB` : '';
+  text(g, bootError ? 'Something went wrong' : progress.label + '...' + mb, W / 2, 430, { size: 22, align: 'center', color: '#d8d4ff' });
 }
 requestAnimationFrame((t) => { last = t; frame(t); });
 window.__game = game;

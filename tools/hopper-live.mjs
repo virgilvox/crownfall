@@ -45,7 +45,7 @@ const state = (f) => f.evaluate((KB) => {
   return {
     mode: m?.mode,
     slots: m?.slots?.map((s) => (s.joined ? `${s.pad === KB ? 'kb' : 'pad' + s.pad}${s.ready ? '*' : ''}` : '-')).join(' '),
-    me: me ? { x: me.pos.x, z: me.pos.z, vy: me.vel.y, dashT: me.dashT, dashCd: me.dashCd, stun: me.stun, grounded: me.grounded, phase: r.phase } : null,
+    me: me ? { dead: me.dead, sx: me.stick?.x, x: me.pos.x, z: me.pos.z, vy: me.vel.y, dashT: me.dashT, dashCd: me.dashCd, stun: me.stun, grounded: me.grounded, phase: r.phase } : null,
     fighters: r?.fighters?.map((x) => (x.isBot ? 'bot' : x.def.padIndex === KB ? 'kb' : 'pad' + x.def.padIndex)).join(' '),
     white: { mats, untextured },
   };
@@ -82,9 +82,14 @@ s = await state(f); check('round has the keyboard player', !!s.me, s.fighters);
 if (s.me) {
   await snap('3-round');
   for (const [k, ax, sign] of [['KeyD', 'x', 1], ['KeyA', 'x', -1], ['KeyW', 'z', -1], ['KeyS', 'z', 1], ['ArrowRight', 'x', 1], ['ArrowLeft', 'x', -1]]) {
-    const a = (await state(f)).me; await page.keyboard.down(k); await sleep(500); await page.keyboard.up(k); const b = (await state(f)).me;
-    const d = b[ax] - a[ax];
-    check(`hold ${k} moves ${sign > 0 ? '+' : '-'}${ax}`, d * sign > 0.8, `moved ${d.toFixed(2)} from (${a.x.toFixed(1)}, ${a.z.toFixed(1)})`);
+    // a bot's shove, a stun or a respawn can eat one attempt, so wait until free and allow a retry
+    let d = 0, a, b, held;
+    for (let attempt = 0; attempt < 3 && d * sign <= 0.8; attempt++) {
+      for (let i = 0; i < 30; i++) { const m = (await state(f)).me; if (!m.dead && m.stun <= 0 && m.grounded) break; await sleep(100); }
+      a = (await state(f)).me; await page.keyboard.down(k); await sleep(250); held = await f.evaluate((KB) => { const p = window.__game.input.pads.get(KB); return p ? [p.x, p.y].map((v) => +v.toFixed(2)) : null; }, 8); await sleep(250); await page.keyboard.up(k); b = (await state(f)).me;
+      d = b[ax] - a[ax];
+    }
+    check(`hold ${k} moves ${sign > 0 ? '+' : '-'}${ax}`, d * sign > 0.8, `moved ${d.toFixed(2)} from (${a.x.toFixed(1)}, ${a.z.toFixed(1)}) pad axes ${held} stun ${b.stun.toFixed(2)} dead ${b.dead}`);
     await sleep(500);
   }
   for (let i = 0; i < 20 && !(await state(f)).me.grounded; i++) await sleep(100);
