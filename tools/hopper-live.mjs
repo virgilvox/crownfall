@@ -51,8 +51,8 @@ const state = (f) => f.evaluate((KB) => {
   };
 }, 8);
 
-await page.mouse.click(400, 400);          // clicking the game must not steal the keyboard
-if (!LOCAL) await tap('Enter');            // HOPPER lobby: start game
+if (LOCAL) await page.mouse.click(400, 400);   // clicking the game must not steal the keyboard
+else await page.mouse.click(535, 200);         // HOPPER lobby: START GAME (keyboard-started, so the keyboard is P1)
 let f = null;
 for (let i = 0; i < 90 && !f; i++) { await sleep(1000); f = await gameFrame(); }
 if (!f) { console.log('no game frame'); await snap('noframe'); process.exit(1); }
