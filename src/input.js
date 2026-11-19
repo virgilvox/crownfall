@@ -85,6 +85,7 @@ export class Input {
       if (st.held[BTN.LEFT]) x = -1; if (st.held[BTN.RIGHT]) x = 1;
       if (st.held[BTN.UP]) y = -1; if (st.held[BTN.DOWN]) y = 1;
       st.x = x; st.y = y;
+      if (x || y || st.held.some(Boolean)) st.used = true;
       const dirs = { left: x < -0.55, right: x > 0.55, up: y < -0.55, down: y > 0.55 };
       for (const d in dirs) {
         st.nav[d] = false;
@@ -99,8 +100,9 @@ export class Input {
       seen.add(KB_INDEX);
       let st = this.pads.get(KB_INDEX);
       if (!st) { st = new PadState(KB_INDEX); st.id = 'KEYBOARD'; st.keyboard = true; st.seat = 0; this.pads.set(KB_INDEX, st); }
-      // sit in the lowest seat no real pad is using (HOPPER may give seat 1 to a phone once the keyboard goes raw)
-      const taken = new Set([...this.pads.values()].filter((p) => !p.keyboard && seen.has(p.index)).map((p) => p.seat));
+      // sit in the lowest seat no real pad is using. HOPPER keeps reporting the keyboard's own lobby seat as an idle pad
+      // after the cart takes raw keys, so a pad only counts once someone has pressed something on it.
+      const taken = new Set([...this.pads.values()].filter((p) => !p.keyboard && p.used && seen.has(p.index)).map((p) => p.seat));
       if (!st.seat || taken.has(st.seat)) { st.seat = 1; while (taken.has(st.seat) && st.seat < 4) st.seat++; }
       this.kb.read(this.kbHeld, this.kbPressed);
       for (let i = 0; i < 17; i++) {

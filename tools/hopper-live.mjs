@@ -62,8 +62,11 @@ let s = await state(f);
 check('avatars are textured', s.white.mats > 0 && s.white.untextured === 0, JSON.stringify(s.white));
 await snap('1-title');
 
+// the title starts its attract demo after 25 s idle; a press drops back to the title
+for (let i = 0; i < 5 && (await f.evaluate('!!window.__menus.attract || window.__menus.mode !== "title"')); i++) { await tap('KeyT'); await sleep(1500); }
 await tap('Space', 30);                    // a very short tap
 s = await state(f); check('Space (30 ms tap) on title opens select, keyboard joins', s.mode === 'select' && /kb/.test(s.slots), s.slots);
+check('keyboard is P1 even though HOPPER still lists an idle seat-1 pad', /^kb/.test(s.slots), s.slots);
 await tap('KeyD'); await tap('KeyA');
 if (LOCAL) {
   await phoneTap(0, 'A');                  // a phone on seat 1 joins while the keyboard sits there

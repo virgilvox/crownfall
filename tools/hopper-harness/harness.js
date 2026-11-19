@@ -47,7 +47,8 @@
     if (!port) return;
     const toPad = (b) => { const buttons = Array(17).fill(0); for (let i = 0; i < 17; i++) if (b & (1 << i)) buttons[i] = 1; return { buttons, axes: [0, 0, 0, 0] }; };
     const pads = phones.map((p) => (p ? toPad(Object.keys(p).filter((k) => p[k]).reduce((a, k) => a | bit(k), 0)) : null));
-    if (!raw && !pads[0]) { let b = 0; for (const c of held) b |= bit(KEYS[c]); pads[0] = toPad(step(b, t)); }
+    // the keyboard holds seat 1 from the lobby; once the cart takes raw keys HOPPER still reports that seat, idle
+    if (!pads[0]) { let b = 0; if (!raw) for (const c of held) b |= bit(KEYS[c]); pads[0] = toPad(raw ? 0 : step(b, t)); }
     const s = JSON.stringify(pads);
     if (s !== last) { last = s; port.postMessage({ type: 'pads', pads }); }
   })(0);
